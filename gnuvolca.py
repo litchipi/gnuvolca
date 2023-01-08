@@ -96,9 +96,11 @@ def exec_upload(args):
         print(f"[{i}/{len(flist)-1}] {os.path.basename(sample_set.rstrip('/'))}/{file}")
         upload(os.path.join(sample_set, file), i)
         pause_btwn_upload()
+        print("")
 
 def exec_clear(args):
     for nbank in args.bank:
+        print(f"Clearing bank {nbank}")
         clr_out = f"{nbank}-stream_clr.wav"
         proc = subprocess.Popen([
             FULL_PATH_SCRIPT,
@@ -108,6 +110,7 @@ def exec_clear(args):
         proc.wait()
         playsound(clr_out)
         os.remove(clr_out)
+        print("")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

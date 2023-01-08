@@ -22,6 +22,7 @@
         unset SOURCE_DATE_EPOCH
         export PATH="$PATH:${pkgs.ffmpeg}/bin"
         ${pkgs.patchelf}/bin/patchelf --set-interpreter ${pkgs.glibc}/lib/ld-linux-x86-64.so.2 ./bin/*
+        set -x
         ${pythonpkg}/bin/python ./gnuvolca.py ${args}
       '';
     in {
@@ -30,10 +31,10 @@
     };
 
   in {
-    apps.${system} = rec {
-      default = upload_dir;
+    apps.${system} = {
+      default = start "$@";
       upload_set = start "upload $@";
-      clear = start "clear";
+      clear = start "clear $@";
       upload = start "sample --bank-nb $2 $1";
     };
 
