@@ -20,8 +20,8 @@
         export LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib$LD_LIBRARY_PATH
         export PYTHONPATH="${pythonpkg.sitePackages}:$PYTHONPATH"
         unset SOURCE_DATE_EPOCH
+        export PATH="$PATH:${pkgs.ffmpeg}/bin"
         ${pkgs.patchelf}/bin/patchelf --set-interpreter ${pkgs.glibc}/lib/ld-linux-x86-64.so.2 ./bin/*
-        set -x
         ${pythonpkg}/bin/python ./gnuvolca.py ${args}
       '';
     in {
@@ -32,10 +32,9 @@
   in {
     apps.${system} = rec {
       default = upload_dir;
-      upload_dir = start "--upload-set ./sets $@";
-      clear = start "--clear";
-      upload = start "--sample $1 --bank-nb $2";
-      format = start "--format ./sets";
+      upload_set = start "upload $@";
+      clear = start "clear";
+      upload = start "sample --bank-nb $2 $1";
     };
 
     devShells.${system}.default = pkgs.mkShell {

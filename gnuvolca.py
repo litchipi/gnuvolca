@@ -25,13 +25,11 @@ STEREO_TO_MONO_FILTERGRAPH=' -af "' + ",".join([
 
 FFMPEG_ARGS = "-y -hide_banner -loglevel error -nostats" # + STEREO_TO_MONO_FILTERGRAPH
 
-def format_audio(finp, nbit=16, freq=33000, nac=1):
-    fout = os.path.splitext(finp)[0] + "_ok.wav"
+def format_audio(finp, fout, nbit=16, freq=33000, nac=1):
     cmd = f"ffmpeg -i {finp} -ac {nac} {FFMPEG_ARGS} -sample_fmt s{nbit} -ar {freq} {fout}"
     res = subprocess.Popen(cmd.split(" ")).wait()
     if res > 0:
         raise Exception(f"Audio conversion failed {res}")
-    os.remove(finp)
 
 def playsound(audiof):
     wave_obj = simpleaudio.WaveObject.from_wave_file(audiof)
@@ -39,7 +37,7 @@ def playsound(audiof):
     play_obj.wait_done()
 
 def pause_btwn_upload():
-    time.sleep(1)
+    time.sleep(0.5)
 
 def erase_bank(nb):
     clr_out = f"{nb}clear.wav"
@@ -58,64 +56,56 @@ def upload(finp, bank_nb, erase=True):
     if erase:
         erase_bank(bank_nb)
         pause_btwn_upload()
+
+    format_audio(finp, "./formatted.wav")
     filename = str(finp).split(".")[0]
-    file_out = f"{bank_nb}-{filename}-stream.wav"
     proc = subprocess.Popen([
         FULL_PATH_SCRIPT,
-        file_out,
-        f"s{bank_nb}c:" + finp
+        "./converted.wav",
+        f"s{bank_nb}c:./formatted.wav"
     ])
     res = proc.wait()
     if res > 0:
         raise Exception(f"Conversion failed {res}")
-    playsound(file_out)
-    os.remove(file_out)
+    os.remove("./formatted.wav")
+    playsound("./converted.wav")
+    os.remove("./converted.wav")
 
-def exec_upload_sample(args):
+def exec_sample(args):
     if not args.bank_nb:
         raise Exception("Bank number not specified")
     if not os.path.isfile(args.sample):
         raise Exception(f"Input file {args.sample} not found")
     upload(args.sample, args.bank_nb)
 
-def exec_upload_sets(args):
-    if len(args.sets) == 0:
+def exec_upload(args):
+    if len(args.set) == 0:
         raise Exception("No sets specified")
     flist = []
-    for sample_set in args.sets:
-        for root, dir, files in os.walk(os.path.join(args.upload_set, sample_set)):
+    for sample_set in args.set:
+        if not os.path.isdir(sample_set):
+            raise Exception(f"Sample set directory {sample_set} not found")
+        for root, dir, files in os.walk(sample_set):
             for file in [f for f in files if ".wav" in f]:
                 flist.append((root, file))
 
     flist = sorted(flist, key=lambda x: x[1])[:100]
-    if args.restart is not None:
-        flist = flist[args.restart:]
-        i = args.restart
-    else:
-        i = 0
-    for sample_set, file in flist:
-        print(f"[{i}/{len(flist)-1}] {sample_set.split('/')[-1]}/{file}")
+    if len(flist) == 0:
+        raise Exception("No file to upload")
+    for i, (sample_set, file) in enumerate(flist):
+        print(f"[{i}/{len(flist)-1}] {os.path.basename(sample_set.rstrip('/'))}/{file}")
         upload(os.path.join(sample_set, file), i)
         pause_btwn_upload()
-        i += 1
 
-def exec_format_audio(args):
-    for root, _, files in os.walk(args.format):
-        for f in files:
-            if f.endswith("_ok.wav"):
-                continue
-            format_audio(os.path.join(root, f))
-
-def exec_clear_samples():
-    for i in range(100):
-        clr_out = f"{i:0>3}-stream_clr.wav"
+def exec_clear(args):
+    for nbank in args.bank:
+        clr_out = f"{nbank}-stream_clr.wav"
         proc = subprocess.Popen([
             FULL_PATH_SCRIPT,
             clr_out,
-            f"e{i}:"
+            f"e{nbank}:"
         ])
         proc.wait()
-
         playsound(clr_out)
         os.remove(clr_out)
 
@@ -128,53 +118,43 @@ if __name__ == "__main__":
         """
     )
 
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "-f", "--format",
-        type=str,
-        help="Format all the audio files found in this directory to Volca-compatible format"
-    )
-    group.add_argument(
-        "-u", "--upload-set",
-        type=str,
-        help="Path to directory containing samples to be uploaded"
-    )
-    group.add_argument(
-        "-c", "--clear",
-        action="store_true",
-        help="Pass this for erasing all samples on the Volca Sample"
-    )
-    group.add_argument(
-        "-s", "--sample",
-        type=str,
-        help="Path to the wav file containing the sample to upload"
-    )
-    parser.add_argument(
-        "-r", "--restart",
-        type=int,
-        help="To which index (re)start the upload process")
+    subp = parser.add_subparsers(dest="cmd")
 
-    parser.add_argument(
-        "-b", "--bank-nb",
-        type=int,
-        help="On which bank upload the given sample")
-
-    parser.add_argument(
-        "sets",
+    upload_parser = subp.add_parser("upload")
+    upload_parser.add_argument(
+        "set",
         type=str,
-        help="Sets to upload",
-        nargs="*",
+        help="Set to upload",
+        nargs="+",
+    )
+
+    clear_parser = subp.add_parser("clear")
+    clear_parser.add_argument(
+        "bank",
+        type=int,
+        help="Bank to clear",
+        nargs="+",
+    )
+
+    sample_parser = subp.add_parser("sample")
+    sample_parser.add_argument(
+        "-n", "--bank-nb",
+        type=int,
+        help="Bank number to upload to sample into",
+    )
+    sample_parser.add_argument(
+        "sample",
+        type=str,
+        help="Sample file to upload",
     )
 
     args = parser.parse_args()
 
-    if args.clear:
-        exec_clear_samples()
-    elif args.format:
-        exec_format_audio(args)
-    elif args.upload_set:
-        exec_upload_sets(args)
-    elif args.sample:
-        exec_upload_sample(args)
+    if args.cmd == "upload":
+        exec_upload(args)
+    elif args.cmd == "clear":
+        exec_clear(args)
+    elif args.cmd == "sample":
+        exec_clear(args)
     else:
-        raise Exception("Unable to know what to do")
+        raise Exception(f"Command not implemented: {args.cmd}")
