@@ -11,30 +11,31 @@
     python_version = pkgs.python310;
     python_packages_version = pkgs.python310Packages;
     pythonpkg = python_version.withPackages (p: with p; [
-      playsound
+      pygobject3
+      simpleaudio
     ]);
 
-    set_python_env = ''
-      export LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib$LD_LIBRARY_PATH
-      export PYTHONPATH="${pythonpkg.sitePackages}:$PYTHONPATH"
-      unset SOURCE_DATE_EPOCH
-    '';
-
-    script_start = pkgs: ''
-      ${set_python_env}
-    '' + (if (builtins.length pkgs == 0) then "" else ''
-      export PATH="$PATH:${builtins.concatStringsSep ":" (builtins.map (p: "${p}/bin/") pkgs)}"
-    '');
-
-    start = pkgs.writeShellScript "start" ''
-      ${script_start []}
-      ${pythonpkg}/bin/python ./gnuvolca.py -d ./samples
-    '';
+    start = args: let
+      script = pkgs.writeShellScript "start" ''
+        export LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib$LD_LIBRARY_PATH
+        export PYTHONPATH="${pythonpkg.sitePackages}:$PYTHONPATH"
+        unset SOURCE_DATE_EPOCH
+        ${pkgs.patchelf}/bin/patchelf --set-interpreter ${pkgs.glibc}/lib/ld-linux-x86-64.so.2 ./bin/*
+        set -x
+        ${pythonpkg}/bin/python ./gnuvolca.py ${args}
+      '';
+    in {
+      type = "app";
+      program = "${script}";
+    };
 
   in {
-    apps.default = {
-      type = "app";
-      program = "${start}";
+    apps.${system} = rec {
+      default = upload_dir;
+      upload_dir = start "--upload-set ./sets $@";
+      clear = start "--clear";
+      upload = start "--sample $1 --bank-nb $2";
+      format = start "--format ./sets";
     };
 
     devShells.${system}.default = pkgs.mkShell {
