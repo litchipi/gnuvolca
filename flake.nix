@@ -11,7 +11,6 @@
     python_version = pkgs.python310;
     python_packages_version = pkgs.python310Packages;
     pythonpkg = python_version.withPackages (p: with p; [
-      pygobject3
       simpleaudio
     ]);
 
