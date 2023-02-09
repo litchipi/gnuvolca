@@ -18,6 +18,7 @@ ALL_CATEGORIES = [
     "ride",
     "perc",
     "instrument",
+    "synth",
     "melody",
     "fx",
     "signal",
@@ -37,7 +38,7 @@ STEREO_TO_MONO_FILTERGRAPH=' -af "' + ",".join([
     "[a]amix",
 ]) + '"'
 
-FFMPEG_ARGS = "-y -hide_banner -loglevel error -nostats" # + STEREO_TO_MONO_FILTERGRAPH
+FFMPEG_ARGS = "-y -hide_banner -loglevel error -nostats"
 
 def warn(msg):
     print(f"WARN\t{msg}")
@@ -50,6 +51,12 @@ def format_audio(finp, fout, nbit=16, freq=33000, nac=1):
     res = subprocess.Popen(cmd.split(" ")).wait()
     if res > 0:
         raise Exception(f"Audio conversion failed {res}")
+
+    # Maximize the volume of the audio
+    res = subprocess.Popen([
+        os.path.join(CWD, "bin", "maximize_volume"),
+        "{fout}"
+    ]).wait()
 
 def playsound(audiof):
     wave_obj = simpleaudio.WaveObject.from_wave_file(audiof)
@@ -84,9 +91,9 @@ def upload(finp, bank_nb, erase=True):
     res = proc.wait()
     if res > 0:
         raise Exception(f"Conversion failed {res}")
-    os.remove("./formatted.wav")
+    #  os.remove("./formatted.wav")
     playsound("./converted.wav")
-    os.remove("./converted.wav")
+    #  os.remove("./converted.wav")
 
 def exec_sample(args):
     if not args.bank_nb:
