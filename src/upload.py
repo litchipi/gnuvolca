@@ -22,14 +22,13 @@ def exec_upload(args):
     if len(args.set) == 0:
         raise Exception("No sets specified")
 
+    metadata = {
+        "ignore": dict(),
+        "last_upload": dict(),
+    }
     if os.path.isfile(args.metadata):
         with open(args.metadata, "r") as f:
-            metadata = json.load(f)
-    else:
-        metadata = {
-            "ignore": dict(),
-            "last_upload": list(),
-        }
+            metadata.update(json.load(f))
 
     # TODO      Make configurable
     all_samples = {cat:list() for cat in ALL_CATEGORIES}
@@ -45,7 +44,7 @@ def exec_upload(args):
                     continue
                 all_samples[category].append((root, file))
 
-    metadata["last_upload"] = list()
+    metadata["last_upload"] = dict()
     tot_sample_nb = sum([len(l) for l in all_samples.values()])
     i = 0
     for cat in ALL_CATEGORIES:
@@ -55,7 +54,7 @@ def exec_upload(args):
                 continue
             print(f"[{i}/{tot_sample_nb-1}] {os.path.basename(sample_set.rstrip('/'))}/{file}")
             upload(os.path.join(sample_set, file), i)
-            metadata["last_upload"].append(f"{i}: {sample_set}/{file}")
+            metadata["last_upload"][i] = f"{sample_set}/{file}"
             pause_btwn_upload()
             print("")
             i += 1

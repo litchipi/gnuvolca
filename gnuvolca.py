@@ -67,7 +67,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.cmd == "upload":
+    if not args.cmd:
+        parser.print_help()
+    elif args.cmd == "upload":
         exec_upload(args)
     elif args.cmd == "clear":
         exec_clear(args)
