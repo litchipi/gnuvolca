@@ -2,12 +2,26 @@
 
 import time
 import sys
+import json
 import argparse
 import os
 import subprocess
 import platform
 import signal
 import simpleaudio
+
+ALL_CATEGORIES = [
+    "kick",
+    "bass",
+    "snare",
+    "hat",
+    "ride",
+    "perc",
+    "instrument",
+    "melody",
+    "fx",
+    "signal",
+]
 
 SYRO_SCRIPT = "syro_volcasample_example.%s" % platform.machine()
 CWD = os.getcwd()
@@ -25,6 +39,12 @@ STEREO_TO_MONO_FILTERGRAPH=' -af "' + ",".join([
 
 FFMPEG_ARGS = "-y -hide_banner -loglevel error -nostats" # + STEREO_TO_MONO_FILTERGRAPH
 
+def warn(msg):
+    print(f"WARN\t{msg}")
+
+def pause_btwn_upload():
+    time.sleep(0.8)
+
 def format_audio(finp, fout, nbit=16, freq=33000, nac=1):
     cmd = f"ffmpeg -i {finp} -ac {nac} {FFMPEG_ARGS} -sample_fmt s{nbit} -ar {freq} {fout}"
     res = subprocess.Popen(cmd.split(" ")).wait()
@@ -35,9 +55,6 @@ def playsound(audiof):
     wave_obj = simpleaudio.WaveObject.from_wave_file(audiof)
     play_obj = wave_obj.play()
     play_obj.wait_done()
-
-def pause_btwn_upload():
-    time.sleep(0.5)
 
 def erase_bank(nb):
     clr_out = f"{nb}clear.wav"
@@ -81,22 +98,47 @@ def exec_sample(args):
 def exec_upload(args):
     if len(args.set) == 0:
         raise Exception("No sets specified")
-    flist = []
+
+    if os.path.isfile(args.metadata):
+        with open(args.metadata, "r") as f:
+            metadata = json.load(f)
+    else:
+        metadata = {
+            "ignore": dict(),
+            "last_upload": list(),
+        }
+
+    # TODO      Make configurable
+    all_samples = {cat:list() for cat in ALL_CATEGORIES}
+
     for sample_set in args.set:
         if not os.path.isdir(sample_set):
             raise Exception(f"Sample set directory {sample_set} not found")
         for root, dir, files in os.walk(sample_set):
             for file in [f for f in files if ".wav" in f]:
-                flist.append((root, file))
+                category = file.rstrip(".wav")[:-2].lower()
+                if category not in ALL_CATEGORIES:
+                    warn(f"File {root}/{file} has unknown category {category}, ignoring ...")
+                    continue
+                all_samples[category].append((root, file))
 
-    flist = sorted(flist, key=lambda x: x[1])[:100]
-    if len(flist) == 0:
-        raise Exception("No file to upload")
-    for i, (sample_set, file) in enumerate(flist):
-        print(f"[{i}/{len(flist)-1}] {os.path.basename(sample_set.rstrip('/'))}/{file}")
-        upload(os.path.join(sample_set, file), i)
-        pause_btwn_upload()
-        print("")
+    metadata["last_upload"] = list()
+    tot_sample_nb = sum([len(l) for l in all_samples.values()])
+    i = 0
+    for cat in ALL_CATEGORIES:
+        flist = sorted(all_samples[cat], key=lambda x: x[1])
+        for sample_set, file in flist:
+            if sample_set in metadata["ignore"] and file in metadata["ignore"][sample_set] and metadata["ignore"][sample_set][file]:
+                continue
+            print(f"[{i}/{tot_sample_nb-1}] {os.path.basename(sample_set.rstrip('/'))}/{file}")
+            upload(os.path.join(sample_set, file), i)
+            metadata["last_upload"].append(f"{i}: {sample_set}/{file}")
+            pause_btwn_upload()
+            print("")
+            i += 1
+
+    with open(args.metadata, "w") as f:
+        json.dump(metadata, f, indent=2)
 
 def exec_clear(args):
     for nbank in args.bank:
@@ -124,6 +166,12 @@ if __name__ == "__main__":
     subp = parser.add_subparsers(dest="cmd")
 
     upload_parser = subp.add_parser("upload")
+    upload_parser.add_argument(
+        "--metadata", "-m",
+        type=str,
+        help="Path to the metadata JSON file",
+        default="metadata.json",
+    )
     upload_parser.add_argument(
         "set",
         type=str,
@@ -158,6 +206,6 @@ if __name__ == "__main__":
     elif args.cmd == "clear":
         exec_clear(args)
     elif args.cmd == "sample":
-        exec_clear(args)
+        exec_sample(args)
     else:
         raise Exception(f"Command not implemented: {args.cmd}")

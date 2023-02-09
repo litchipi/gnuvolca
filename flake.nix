@@ -32,9 +32,9 @@
   in {
     apps.${system} = {
       default = start "$@";
-      upload_set = start "upload $@";
+      upload = start "upload $@";
       clear = start "clear $@";
-      upload = start "sample --bank-nb $2 $1";
+      sample = start "sample --bank-nb $2 $1";
     };
 
     devShells.${system}.default = pkgs.mkShell {
