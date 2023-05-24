@@ -2,3 +2,5 @@ samples
 *.wav
 *.pyc
 metadata.json
+*.json
+.backups/
